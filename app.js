@@ -12,14 +12,14 @@
 /* Bump a cada publicação -- aparece no topo do app para confirmar que a
    versão nova entrou no ar (o service worker cacheia agressivamente, então
    sem isso não dá para saber se o celular já atualizou). */
-const APP_VERSION = "2.8.0";
-const BUILD_TIME = "2026-09-24 01:45";
+const APP_VERSION = "3.0.0";
+const BUILD_TIME = "2026-09-24 02:30";
 
-const STORAGE_KEY = "mulher-moderna-data-v1";
+const STORAGE_KEY = "mulher-moderna-data-v2";
 
 const state = load() || {
   lista: [],
-  remedios: [],
+  tratamentos: [],
   compromissos: [],
 };
 
@@ -84,11 +84,6 @@ function parseTime(text) {
   return `${hh}:${mm}`;
 }
 
-function parseChildName(text) {
-  const m = text.match(/rem[ée]dio\s+d[aoe]s?\s+([a-zçãõáéíóúâêô]+)/i);
-  return m ? capitalize(m[1]) : null;
-}
-
 function stripArticle(s) {
   return s.trim().replace(/^(o|a|os|as|um|uma)\s+/i, "").trim();
 }
@@ -128,12 +123,10 @@ function parseCommand(raw) {
   m = text.match(/rem[ée]dio\s+d[aoe]s?\s+([a-zçãõáéíóúâêô]+)\s+(?:j[áa]\s+)?(?:foi\s+)?(?:dado|tomado)/i);
   if (m) return { type: "remedio_confirmar", child: capitalize(m[1]) };
 
-  // 3) Cadastrar remédio: precisa de "remédio de/da/do <nome>" + um horário
-  const child = parseChildName(text);
+  // 3) Cadastrar remédio (tratamento) -- sempre via IA, que faz as perguntas
+  // de nome do remédio / intervalo / duração antes de criar (ver interpret.js)
+  if (/rem[ée]dio/.test(text)) return null;
   const time = parseTime(text);
-  if (child && time && /rem[ée]dio/.test(text)) {
-    return { type: "remedio_add", child, time };
-  }
 
   // 4) Adicionar item(ns) na lista de compras
   m = text.match(/^(?:adicion\w*|coloc\w*|p[õo][eê]\w*|inser\w*|compr\w*|precisa de|falta)\s+(.+?)\s+(?:n?[aà]s?|pras?|para\s+a)\s+(?:minha\s+)?lista(?:\s+de\s+compras)?$/);
@@ -223,23 +216,34 @@ function renderLista() {
     });
 }
 
+function formatDoseWhen(iso) {
+  const d = new Date(iso);
+  const now = new Date();
+  const hhmm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const sameDay = d.toDateString() === now.toDateString();
+  if (sameDay) return `hoje ${hhmm}`;
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")} ${hhmm}`;
+}
+
 function renderRemedios() {
   const ul = document.getElementById("remediosItems");
   const empty = document.getElementById("remediosEmpty");
-  document.getElementById("remediosCount").textContent = `${state.remedios.length} cadastrados`;
+  document.getElementById("remediosCount").textContent = `${state.tratamentos.length} cadastrados`;
   ul.innerHTML = "";
-  empty.style.display = state.remedios.length ? "none" : "block";
-  state.remedios.forEach((r) => {
+  empty.style.display = state.tratamentos.length ? "none" : "block";
+  state.tratamentos.forEach((t) => {
+    const givenCount = t.doses.filter((d) => d.given).length;
+    const next = nextPendingDose(t);
     const li = document.createElement("li");
     li.className = "item-row";
-    const tagClass = r.confirmedToday ? "" : "warn";
+    const tagClass = next ? "warn" : "";
     li.innerHTML = `
-      <div class="check ${r.confirmedToday ? "checked" : ""}" data-id="${r.id}" data-action="toggle-remedio">${r.confirmedToday ? "✓" : ""}</div>
+      <div class="check ${!next ? "checked" : ""}">${!next ? "✓" : ""}</div>
       <div class="item-main">
-        <div class="item-title">${r.child} · ${r.time}</div>
-        <div class="item-sub">${r.confirmedToday ? "Confirmado hoje" : "Aguardando confirmação"} · ${r.history.length} doses no histórico</div>
+        <div class="item-title">${t.child} · ${t.medName}</div>
+        <div class="item-sub">${next ? `Próxima dose: ${formatDoseWhen(next.at)}` : "Tratamento concluído"} · ${givenCount}/${t.doses.length} doses · de ${t.intervalHours} em ${t.intervalHours}h por ${t.days} dia${t.days > 1 ? "s" : ""}</div>
       </div>
-      <span class="tag ${tagClass}" data-id="${r.id}" data-action="test-alarm" style="cursor:pointer">🔔 testar</span>
+      ${next ? `<span class="tag ${tagClass}" data-id="${t.id}" data-action="test-alarm" style="cursor:pointer">🔔 testar</span>` : ""}
     `;
     ul.appendChild(li);
   });
@@ -267,9 +271,11 @@ function renderCompromissos() {
 
 function renderBrief() {
   const parts = [];
-  const pendentes = state.remedios.filter((r) => !r.confirmedToday);
+  const pendentes = state.tratamentos.map((t) => ({ t, next: nextPendingDose(t) })).filter((x) => x.next);
   if (pendentes.length) {
-    parts.push(`${pendentes.length === 1 ? "o remédio de" : "os remédios de"} ${pendentes.map((r) => `${r.child} às ${r.time}`).join(", ")}`);
+    parts.push(
+      `${pendentes.length === 1 ? "o remédio de" : "os remédios de"} ${pendentes.map((x) => `${x.t.child} às ${formatDoseWhen(x.next.at).replace("hoje ", "")}`).join(", ")}`
+    );
   }
   if (state.compromissos.length) {
     const first = state.compromissos[0];
@@ -302,18 +308,53 @@ function marcarListaComprado(itemText) {
   const found = state.lista.find((i) => !i.done && i.text.toLowerCase().includes(t));
   return found ? ((found.done = true), true) : false;
 }
-function addRemedio(child, time) {
-  const existing = state.remedios.find((r) => r.child === child && r.time === time);
-  if (existing) return existing;
-  const r = { id: uid(), child, time, confirmedToday: false, history: [] };
-  state.remedios.push(r);
-  return r;
+/* ------------------------- Tratamentos de remédio -------------------------
+   Um "tratamento" gera todas as doses de uma vez (nome do remédio + de
+   quantas em quantas horas + por quantos dias), em vez de um lembrete
+   avulso -- é o que a IA pede antes de criar (ver interpret.js). */
+function resolveDateTime(dateLabel, hhmm) {
+  const [hh, mm] = (hhmm || "00:00").split(":").map(Number);
+  const d = new Date();
+  d.setHours(hh || 0, mm || 0, 0, 0);
+  const diaMatch = /dia\s+(\d{1,2})/i.exec(dateLabel || "");
+  if (diaMatch) d.setDate(parseInt(diaMatch[1], 10));
+  else if (/amanh[ãa]/i.test(dateLabel || "")) d.setDate(d.getDate() + 1);
+  return d;
 }
-function confirmarRemedio(child) {
-  const r = state.remedios.find((x) => x.child === child && !x.confirmedToday);
-  if (!r) return false;
-  r.confirmedToday = true;
-  r.history.push(new Date().toISOString());
+
+function criarTratamento({ child, medName, time, dateLabel, intervalHours, days }) {
+  const interval = Number(intervalHours) > 0 ? Number(intervalHours) : 24;
+  const totalDays = Number(days) > 0 ? Number(days) : 1;
+  const start = resolveDateTime(dateLabel, time);
+  const doses = [];
+  const totalMs = totalDays * 24 * 60 * 60 * 1000;
+  const intervalMs = interval * 60 * 60 * 1000;
+  for (let t = start.getTime(); t < start.getTime() + totalMs; t += intervalMs) {
+    doses.push({ id: uid(), at: new Date(t).toISOString(), given: false });
+  }
+  const tratamento = {
+    id: uid(),
+    child,
+    medName: medName || "Remédio",
+    intervalHours: interval,
+    days: totalDays,
+    doses,
+  };
+  state.tratamentos.push(tratamento);
+  return tratamento;
+}
+
+function nextPendingDose(tratamento) {
+  return tratamento.doses.find((d) => !d.given) || null;
+}
+
+function confirmarDose(child) {
+  const candidatos = state.tratamentos
+    .map((t) => ({ t, dose: nextPendingDose(t) }))
+    .filter((x) => x.dose && x.t.child === child)
+    .sort((a, b) => new Date(a.dose.at) - new Date(b.dose.at));
+  if (!candidatos.length) return false;
+  candidatos[0].dose.given = true;
   hideAlarm();
   return true;
 }
@@ -332,11 +373,12 @@ function applyCommand(cmd) {
       const ok = marcarListaComprado(cmd.item);
       return ok ? `Marquei "${cmd.item}" como comprado.` : `Não encontrei "${cmd.item}" na lista.`;
     }
-    case "remedio_add":
-      addRemedio(cmd.child, cmd.time);
-      return `Prontinho! Remédio de ${cmd.child} às ${cmd.time}, vou te lembrar.`;
+    case "remedio_tratamento": {
+      const t = criarTratamento(cmd);
+      return `Prontinho! ${cmd.medName} de ${cmd.child}, de ${t.intervalHours} em ${t.intervalHours}h por ${t.days} dia${t.days > 1 ? "s" : ""} — ${t.doses.length} doses agendadas a partir de ${formatDoseWhen(t.doses[0].at)}.`;
+    }
     case "remedio_confirmar": {
-      const ok = confirmarRemedio(cmd.child);
+      const ok = confirmarDose(cmd.child);
       return ok ? `Confirmado! Registrei que ${cmd.child} tomou o remédio.` : `Não encontrei remédio pendente de ${cmd.child}.`;
     }
     case "compromisso_add":
@@ -391,12 +433,15 @@ const alarmTitle = document.getElementById("alarmTitle");
 const alarmSub = document.getElementById("alarmSub");
 let alarmChild = null;
 
-function showAlarm(remedio) {
-  alarmChild = remedio.child;
-  alarmTitle.textContent = `Hora do remédio de ${remedio.child}`;
-  alarmSub.textContent = `Agendado para ${remedio.time}. Confirma que já foi dado?`;
+function showAlarm(tratamento) {
+  const dose = nextPendingDose(tratamento);
+  if (!dose) return;
+  alarmChild = tratamento.child;
+  const idx = tratamento.doses.indexOf(dose) + 1;
+  alarmTitle.textContent = `Hora do remédio de ${tratamento.child}`;
+  alarmSub.textContent = `${tratamento.medName} — dose ${idx} de ${tratamento.doses.length}. Agendado para ${formatDoseWhen(dose.at)}. Confirma que já foi dado?`;
   alarmOverlay.classList.add("show");
-  speak(`Atenção! Hora do remédio de ${remedio.child}.`);
+  speak(`Atenção! Hora do remédio de ${tratamento.child}.`);
 }
 function hideAlarm() {
   alarmOverlay.classList.remove("show");
@@ -404,7 +449,7 @@ function hideAlarm() {
 }
 document.getElementById("alarmConfirm").addEventListener("click", () => {
   if (alarmChild) {
-    confirmarRemedio(alarmChild);
+    confirmarDose(alarmChild);
     renderAll();
   }
 });
@@ -419,10 +464,10 @@ document.getElementById("alarmSnooze").addEventListener("click", () => {
 ---------------------------------------------------------------------------- */
 setInterval(() => {
   const now = new Date();
-  const hhmm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  state.remedios.forEach((r) => {
-    if (!r.confirmedToday && r.time === hhmm && !alarmOverlay.classList.contains("show")) {
-      showAlarm(r);
+  state.tratamentos.forEach((t) => {
+    const dose = nextPendingDose(t);
+    if (dose && new Date(dose.at) <= now && !alarmOverlay.classList.contains("show")) {
+      showAlarm(t);
     }
   });
 }, 15000);
@@ -447,13 +492,8 @@ document.getElementById("screen").addEventListener("click", (e) => {
     renderAll();
   }
   if (action === "test-alarm") {
-    const r = state.remedios.find((x) => x.id === id);
-    if (r) showAlarm(r);
-  }
-  if (action === "toggle-remedio") {
-    const r = state.remedios.find((x) => x.id === id);
-    if (r && !r.confirmedToday) confirmarRemedio(r.child);
-    renderAll();
+    const t = state.tratamentos.find((x) => x.id === id);
+    if (t) showAlarm(t);
   }
 });
 
@@ -476,21 +516,49 @@ const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRec
 let recognition = null;
 let listening = false;
 
+/* continuous:true evita que o navegador corte a fala no meio de uma pausa
+   natural entre frases (ex: "lembra do dentista amanhã... e também leva o
+   carro na revisão"). Em vez de deixar o navegador decidir quando o
+   usuário terminou, controlamos isso nós mesmos: acumulamos os trechos
+   finalizados e só processamos o comando depois de ~1.8s sem fala nova. */
+const SILENCE_MS = 1800;
+let finalBuffer = "";
+let silenceTimer = null;
+
+function scheduleFinalize() {
+  clearTimeout(silenceTimer);
+  silenceTimer = setTimeout(finalizeManual, SILENCE_MS);
+}
+
+function finalizeManual() {
+  clearTimeout(silenceTimer);
+  const text = finalBuffer.trim();
+  finalBuffer = "";
+  if (recognition && listening) recognition.stop();
+  if (text) executeCommand(text);
+}
+
 if (SpeechRecognitionCtor) {
   recognition = new SpeechRecognitionCtor();
   recognition.lang = "pt-BR";
+  recognition.continuous = true;
   recognition.interimResults = true;
   recognition.maxAlternatives = 1;
 
   recognition.onstart = () => {
     listening = true;
+    finalBuffer = "";
     micBtn.classList.add("listening");
-    micHint.textContent = "Ouvindo…";
+    micHint.textContent = "Ouvindo… (toque de novo quando terminar de falar)";
   };
   recognition.onend = () => {
     listening = false;
+    clearTimeout(silenceTimer);
     micBtn.classList.remove("listening");
     micHint.textContent = 'Toque e fale, ex: "lembra do remédio da Sofia às 14h"';
+    const pending = finalBuffer.trim();
+    finalBuffer = "";
+    if (pending) executeCommand(pending);
   };
   recognition.onerror = (e) => {
     if (e.error === "not-allowed" || e.error === "service-not-allowed") {
@@ -498,15 +566,14 @@ if (SpeechRecognitionCtor) {
     }
   };
   recognition.onresult = (e) => {
-    let finalText = "";
     let interim = "";
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const t = e.results[i][0].transcript;
-      if (e.results[i].isFinal) finalText += t;
+      if (e.results[i].isFinal) finalBuffer += (finalBuffer ? " " : "") + t.trim();
       else interim += t;
     }
-    transcriptEl.textContent = finalText || interim;
-    if (finalText) executeCommand(finalText);
+    transcriptEl.textContent = `${finalBuffer} ${interim}`.trim();
+    scheduleFinalize();
   };
 } else {
   micHint.textContent = "Reconhecimento de voz não suportado neste navegador — use o campo de texto abaixo.";
@@ -514,7 +581,7 @@ if (SpeechRecognitionCtor) {
 
 micBtn.addEventListener("click", () => {
   if (!recognition) return typedFallbackPrompt();
-  if (listening) recognition.stop();
+  if (listening) finalizeManual();
   else {
     transcriptEl.textContent = "";
     try {
@@ -708,9 +775,9 @@ document.getElementById("profileBtn").addEventListener("click", () => {
 
 /* ---------------------------------- Seed ----------------------------------- */
 function seedIfEmpty() {
-  if (state.lista.length || state.remedios.length || state.compromissos.length) return;
+  if (state.lista.length || state.tratamentos.length || state.compromissos.length) return;
   addListaItems(["arroz", "fralda", "leite"]);
-  addRemedio("Sofia", "14:00");
+  criarTratamento({ child: "Sofia", medName: "Amoxicilina", time: "14:00", dateLabel: "hoje", intervalHours: 8, days: 3 });
   addCompromisso("Dentista da Sofia", "amanhã", "10:00");
 }
 

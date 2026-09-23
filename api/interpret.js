@@ -11,20 +11,21 @@ O usuário fala uma frase em português (às vezes informal, com gírias, frases
 
 {"type":"lista_add","items":["item1","item2"]}
 {"type":"lista_marcar","item":"nome do item"}
-{"type":"remedio_add","child":"Nome","time":"HH:MM"}
+{"type":"remedio_tratamento","child":"Nome","medName":"Nome do remédio","time":"HH:MM","dateLabel":"hoje|amanhã|dia N","intervalHours":N,"days":D}
 {"type":"remedio_confirmar","child":"Nome"}
 {"type":"compromisso_add","title":"Título curto","dateLabel":"hoje|amanhã|dia N","time":"HH:MM"}
-{"type":"desconhecido","reply":"uma frase curta e simpática em português pedindo pra repetir de outro jeito"}
+{"type":"desconhecido","reply":"uma frase curta e simpática em português pedindo pra repetir de outro jeito, ou o que falta"}
 
 Regras:
 - Se a frase menciona várias tarefas (ex: "trocar o pneu, pagar um boleto e ir à reunião às 14h"), devolva um array com um objeto por tarefa -- NUNCA misture várias tarefas em um só objeto.
 - Cada tarefa usa só o horário/data que foi dito especificamente para ELA, nunca reaproveita o horário de outra tarefa da mesma frase.
 - Assim que uma atividade tiver um TÍTULO e um HORÁRIO (mesmo que pareça uma tarefa doméstica comum, tipo "trocar o pneu às 15h"), classifique direto como "compromisso_add" -- decida sozinho, NUNCA pergunte de volta "isso é um compromisso?" ou "quer que eu agende?". Se não vier nenhuma data, use "dateLabel":"hoje".
-- "type":"desconhecido" só quando faltar informação que impede a ação (o mais comum: falta o horário) -- nesse caso pergunte só o que falta, direto ("Que horas é o [atividade]?"), sem perguntar se deve virar compromisso.
+- REMÉDIO é sempre um "remedio_tratamento" (nunca um lembrete avulso) e SÓ deve ser criado quando você já souber TODOS os 5 dados: nome da criança, nome do remédio, horário da primeira dose, de quantas em quantas horas (intervalHours) e por quantos dias (days). Se faltar qualquer um desses, devolva "desconhecido" com UMA pergunta só reunindo TUDO que falta de uma vez (nunca pergunte um dado por vez) -- ex: "Qual o nome do remédio, a que horas é a primeira dose, de quantas em quantas horas, e por quantos dias?". Se não disser a data da primeira dose, assuma "hoje".
+- "type":"desconhecido" também quando faltar informação de qualquer outra tarefa (o mais comum: falta o horário de um compromisso) -- pergunte só o que falta, direto.
 - "pagar um boleto" ou tarefa sem lista/remédio/compromisso/horário claro: "desconhecido" pedindo mais detalhe, sem inventar.
-- Nomes de criança: capitalize a primeira letra.
-- Horários: sempre formato 24h "HH:MM".
-- Nunca invente item, nome ou horário que não foi dito.
+- Nomes de criança e de remédio: capitalize a primeira letra.
+- Horários: sempre formato 24h "HH:MM". intervalHours e days: sempre números inteiros.
+- Nunca invente item, nome, remédio, intervalo, duração ou horário que não foi dito.
 - Responda só o JSON array, nunca markdown, nunca explicação. Exemplo de resposta para frase com 2 tarefas: [{"type":"lista_add","items":["arroz"]},{"type":"compromisso_add","title":"Dentista","dateLabel":"amanhã","time":"10:00"}]`;
 
 module.exports = async (req, res) => {
