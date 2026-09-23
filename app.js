@@ -12,8 +12,8 @@
 /* Bump a cada publicação -- aparece no topo do app para confirmar que a
    versão nova entrou no ar (o service worker cacheia agressivamente, então
    sem isso não dá para saber se o celular já atualizou). */
-const APP_VERSION = "1.1.0";
-const BUILD_TIME = "2026-09-23 15:40";
+const APP_VERSION = "1.1.1";
+const BUILD_TIME = "2026-09-23 16:20";
 
 const STORAGE_KEY = "mulher-moderna-data-v1";
 
@@ -117,13 +117,13 @@ function parseCommand(raw) {
   }
 
   // 4) Adicionar item(ns) na lista de compras
-  m = text.match(/^(?:adicion\w*|coloc\w*|p[õo][eê]\w*|inser\w*|compr\w*|precisa de|falta)\s+(.+?)\s+(?:na|pra|para\s+a)\s+(?:minha\s+)?lista(?:\s+de\s+compras)?$/);
+  m = text.match(/^(?:adicion\w*|coloc\w*|p[õo][eê]\w*|inser\w*|compr\w*|precisa de|falta)\s+(.+?)\s+(?:n?[aà]s?|pras?|para\s+a)\s+(?:minha\s+)?lista(?:\s+de\s+compras)?$/);
   if (m) {
     const items = m[1].split(/,| e /).map((s) => stripArticle(s)).filter(Boolean);
     return { type: "lista_add", items };
   }
   // variação sem verbo explícito: "arroz e leite na lista"
-  m = text.match(/^(.+?)\s+(?:na|pra|para\s+a)\s+(?:minha\s+)?lista(?:\s+de\s+compras)?$/);
+  m = text.match(/^(.+?)\s+(?:n?[aà]s?|pras?|para\s+a)\s+(?:minha\s+)?lista(?:\s+de\s+compras)?$/);
   if (m && !/rem[ée]dio/.test(text)) {
     const items = m[1].split(/,| e /).map((s) => stripArticle(s)).filter(Boolean);
     return { type: "lista_add", items };
