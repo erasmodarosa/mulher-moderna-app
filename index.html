@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Mulher Moderna</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="phone">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <span class="brand-name">Mulher Moderna</span>
+      </div>
+      <div class="profile" id="profileBtn" title="Trocar perfil">A</div>
+    </header>
+
+    <main class="screen" id="screen">
+
+      <!-- Resumo matinal -->
+      <section class="card brief" id="briefCard">
+        <div class="brief-label">Bom dia, Ana</div>
+        <p class="brief-text" id="briefText">Carregando seu resumo do dia…</p>
+      </section>
+
+      <!-- Botão de voz -->
+      <section class="mic-zone">
+        <button class="mic-btn" id="micBtn" aria-label="Falar com a Moderna">
+          <svg id="micIcon" viewBox="0 0 24 24" width="34" height="34" fill="none">
+            <path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Z" stroke="currentColor" stroke-width="1.8"/>
+            <path d="M19 11a7 7 0 0 1-14 0M12 18v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <div class="mic-hint" id="micHint">Toque e fale, ex: "lembra do remédio da Sofia às 14h"</div>
+        <div class="transcript" id="transcript"></div>
+      </section>
+
+      <!-- Tabs -->
+      <nav class="tabs">
+        <button class="tab active" data-tab="lista">Lista</button>
+        <button class="tab" data-tab="remedios">Remédios</button>
+        <button class="tab" data-tab="compromissos">Compromissos</button>
+      </nav>
+
+      <!-- Lista de compras -->
+      <section class="tab-panel active" id="panel-lista">
+        <div class="panel-head">
+          <h2>Lista de compras</h2>
+          <span class="count" id="listaCount">0 itens</span>
+        </div>
+        <ul class="items" id="listaItems"></ul>
+        <p class="empty-hint" id="listaEmpty">Fale "adiciona arroz na lista" para começar.</p>
+      </section>
+
+      <!-- Remédios -->
+      <section class="tab-panel" id="panel-remedios">
+        <div class="panel-head">
+          <h2>Remédios das crianças</h2>
+          <span class="count" id="remediosCount">0 cadastrados</span>
+        </div>
+        <ul class="items" id="remediosItems"></ul>
+        <p class="empty-hint" id="remediosEmpty">Fale "remédio da Sofia às 14h" para cadastrar.</p>
+      </section>
+
+      <!-- Compromissos -->
+      <section class="tab-panel" id="panel-compromissos">
+        <div class="panel-head">
+          <h2>Compromissos</h2>
+          <span class="count" id="compromissosCount">0 agendados</span>
+        </div>
+        <ul class="items" id="compromissosItems"></ul>
+        <p class="empty-hint" id="compromissosEmpty">Fale "dentista da Sofia amanhã às 10h" para agendar.</p>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Toast de confirmação -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Modal de alarme de remédio -->
+  <div class="alarm-overlay" id="alarmOverlay">
+    <div class="alarm-card">
+      <div class="alarm-icon">💊</div>
+      <div class="alarm-title" id="alarmTitle">Hora do remédio</div>
+      <div class="alarm-sub" id="alarmSub"></div>
+      <button class="alarm-confirm" id="alarmConfirm">Já dei o remédio</button>
+      <button class="alarm-snooze" id="alarmSnooze">Lembrar em 5 min</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
