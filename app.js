@@ -12,8 +12,8 @@
 /* Bump a cada publicação -- aparece no topo do app para confirmar que a
    versão nova entrou no ar (o service worker cacheia agressivamente, então
    sem isso não dá para saber se o celular já atualizou). */
-const APP_VERSION = "2.6.0";
-const BUILD_TIME = "2026-09-23 23:20";
+const APP_VERSION = "2.6.1";
+const BUILD_TIME = "2026-09-23 23:50";
 
 const STORAGE_KEY = "mulher-moderna-data-v1";
 
