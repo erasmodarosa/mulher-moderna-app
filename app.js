@@ -12,8 +12,8 @@
 /* Bump a cada publicação -- aparece no topo do app para confirmar que a
    versão nova entrou no ar (o service worker cacheia agressivamente, então
    sem isso não dá para saber se o celular já atualizou). */
-const APP_VERSION = "3.1.0";
-const BUILD_TIME = "2026-09-24 03:00";
+const APP_VERSION = "3.1.1";
+const BUILD_TIME = "2026-09-24 03:25";
 
 const STORAGE_KEY = "mulher-moderna-data-v2";
 
@@ -516,55 +516,28 @@ const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRec
 let recognition = null;
 let listening = false;
 
-/* continuous:true evita que o navegador corte a fala no meio de uma pausa
-   natural entre frases (ex: "lembra do dentista amanhã... e também leva o
-   carro na revisão"). Em vez de deixar o navegador decidir quando o
-   usuário terminou, controlamos isso nós mesmos: acumulamos os trechos
-   finalizados e só processamos o comando depois de ~1.8s sem fala nova. */
-const SILENCE_MS = 1800;
-const MAX_LISTEN_MS = 12000; // trava de segurança: nunca escuta indefinidamente (ex: ruído/eco sendo mal-reconhecido em loop)
-let finalBuffer = "";
-let silenceTimer = null;
-let maxListenTimer = null;
-
-function scheduleFinalize() {
-  clearTimeout(silenceTimer);
-  silenceTimer = setTimeout(finalizeManual, SILENCE_MS);
-}
-
-function finalizeManual() {
-  clearTimeout(silenceTimer);
-  clearTimeout(maxListenTimer);
-  const text = finalBuffer.trim();
-  finalBuffer = "";
-  if (recognition && listening) recognition.stop();
-  if (text) executeCommand(text);
-}
-
+/* continuous:true (testado numa versão anterior) tenta evitar que o
+   navegador corte a fala no meio de uma pausa natural, mas no Android/
+   Chrome ele tem um bug conhecido: o reconhecimento de voz do sistema
+   passa a repetir/alucinar palavras em loop. Por isso usamos o modo
+   simples (uma gravação = um comando) -- se uma frase for cortada no meio,
+   a memória de conversa (pendingClarification, mais abaixo) permite
+   completar em outra fala, em vez de arriscar esse bug. */
 if (SpeechRecognitionCtor) {
   recognition = new SpeechRecognitionCtor();
   recognition.lang = "pt-BR";
-  recognition.continuous = true;
   recognition.interimResults = true;
   recognition.maxAlternatives = 1;
 
   recognition.onstart = () => {
     listening = true;
-    finalBuffer = "";
     micBtn.classList.add("listening");
-    micHint.textContent = "Ouvindo… (toque de novo quando terminar de falar)";
-    clearTimeout(maxListenTimer);
-    maxListenTimer = setTimeout(finalizeManual, MAX_LISTEN_MS);
+    micHint.textContent = "Ouvindo…";
   };
   recognition.onend = () => {
     listening = false;
-    clearTimeout(silenceTimer);
-    clearTimeout(maxListenTimer);
     micBtn.classList.remove("listening");
     micHint.textContent = 'Toque e fale, ex: "lembra do remédio da Sofia às 14h"';
-    const pending = finalBuffer.trim();
-    finalBuffer = "";
-    if (pending) executeCommand(pending);
   };
   recognition.onerror = (e) => {
     if (e.error === "not-allowed" || e.error === "service-not-allowed") {
@@ -572,14 +545,15 @@ if (SpeechRecognitionCtor) {
     }
   };
   recognition.onresult = (e) => {
+    let finalText = "";
     let interim = "";
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const t = e.results[i][0].transcript;
-      if (e.results[i].isFinal) finalBuffer += (finalBuffer ? " " : "") + t.trim();
+      if (e.results[i].isFinal) finalText += t;
       else interim += t;
     }
-    transcriptEl.textContent = `${finalBuffer} ${interim}`.trim();
-    scheduleFinalize();
+    transcriptEl.textContent = finalText || interim;
+    if (finalText) executeCommand(finalText);
   };
 } else {
   micHint.textContent = "Reconhecimento de voz não suportado neste navegador — use o campo de texto abaixo.";
@@ -587,7 +561,7 @@ if (SpeechRecognitionCtor) {
 
 micBtn.addEventListener("click", () => {
   if (!recognition) return typedFallbackPrompt();
-  if (listening) finalizeManual();
+  if (listening) recognition.stop();
   else {
     transcriptEl.textContent = "";
     try {
