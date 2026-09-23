@@ -12,8 +12,8 @@
 /* Bump a cada publicação -- aparece no topo do app para confirmar que a
    versão nova entrou no ar (o service worker cacheia agressivamente, então
    sem isso não dá para saber se o celular já atualizou). */
-const APP_VERSION = "2.7.0";
-const BUILD_TIME = "2026-09-24 00:40";
+const APP_VERSION = "2.7.1";
+const BUILD_TIME = "2026-09-24 01:10";
 
 const STORAGE_KEY = "mulher-moderna-data-v1";
 
@@ -93,8 +93,27 @@ function stripArticle(s) {
   return s.trim().replace(/^(o|a|os|as|um|uma)\s+/i, "").trim();
 }
 
+/* O parser local casa por posição (primeiro horário, primeiro "remédio de
+   X" que encontra) -- ótimo pra frase com UMA tarefa, mas perigoso numa
+   frase composta ("remédio da Sofia às 14h e reunião amanhã às 10h"): ele
+   pegaria só o primeiro pedaço e IGNORARIA o resto, sem nunca cair na IA.
+   Por isso, ao detectar sinais de mais de uma tarefa na mesma frase,
+   devolvemos null de propósito para forçar o fallback de IA (que já lida
+   com várias tarefas corretamente, ver api/interpret.js). */
+function looksCompound(text) {
+  const timeMatches = text.match(/(?:[àa]s?|pras?|para\s+as?)\s*\d{1,2}(?::\d{2})?\s*h(?:oras?)?\b|\b\d{1,2}:\d{2}\b|\b\d{1,2}\s*h(?:oras?)?\b/gi) || [];
+  const remedioCount = (text.match(/rem[ée]dio/gi) || []).length;
+  const dateWordCount = (text.match(/\b(hoje|amanh[ãa]|dia\s+\d{1,2})\b/gi) || []).length;
+  if (timeMatches.length > 1) return true;
+  if (remedioCount > 1) return true;
+  if (dateWordCount > 1) return true;
+  if (remedioCount >= 1 && dateWordCount >= 1) return true;
+  return false;
+}
+
 function parseCommand(raw) {
   const text = normalize(raw);
+  if (looksCompound(text)) return null;
 
   // 1) Marcar item da lista como comprado
   let m =
