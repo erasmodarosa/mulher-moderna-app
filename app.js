@@ -12,8 +12,8 @@
 /* Bump a cada publicação -- aparece no topo do app para confirmar que a
    versão nova entrou no ar (o service worker cacheia agressivamente, então
    sem isso não dá para saber se o celular já atualizou). */
-const APP_VERSION = "3.0.0";
-const BUILD_TIME = "2026-09-24 02:30";
+const APP_VERSION = "3.1.0";
+const BUILD_TIME = "2026-09-24 03:00";
 
 const STORAGE_KEY = "mulher-moderna-data-v2";
 
@@ -522,8 +522,10 @@ let listening = false;
    usuário terminou, controlamos isso nós mesmos: acumulamos os trechos
    finalizados e só processamos o comando depois de ~1.8s sem fala nova. */
 const SILENCE_MS = 1800;
+const MAX_LISTEN_MS = 12000; // trava de segurança: nunca escuta indefinidamente (ex: ruído/eco sendo mal-reconhecido em loop)
 let finalBuffer = "";
 let silenceTimer = null;
+let maxListenTimer = null;
 
 function scheduleFinalize() {
   clearTimeout(silenceTimer);
@@ -532,6 +534,7 @@ function scheduleFinalize() {
 
 function finalizeManual() {
   clearTimeout(silenceTimer);
+  clearTimeout(maxListenTimer);
   const text = finalBuffer.trim();
   finalBuffer = "";
   if (recognition && listening) recognition.stop();
@@ -550,10 +553,13 @@ if (SpeechRecognitionCtor) {
     finalBuffer = "";
     micBtn.classList.add("listening");
     micHint.textContent = "Ouvindo… (toque de novo quando terminar de falar)";
+    clearTimeout(maxListenTimer);
+    maxListenTimer = setTimeout(finalizeManual, MAX_LISTEN_MS);
   };
   recognition.onend = () => {
     listening = false;
     clearTimeout(silenceTimer);
+    clearTimeout(maxListenTimer);
     micBtn.classList.remove("listening");
     micHint.textContent = 'Toque e fale, ex: "lembra do remédio da Sofia às 14h"';
     const pending = finalBuffer.trim();
