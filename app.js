@@ -12,8 +12,8 @@
 /* Bump a cada publicação -- aparece no topo do app para confirmar que a
    versão nova entrou no ar (o service worker cacheia agressivamente, então
    sem isso não dá para saber se o celular já atualizou). */
-const APP_VERSION = "2.7.1";
-const BUILD_TIME = "2026-09-24 01:10";
+const APP_VERSION = "2.8.0";
+const BUILD_TIME = "2026-09-24 01:45";
 
 const STORAGE_KEY = "mulher-moderna-data-v1";
 
@@ -347,15 +347,36 @@ function applyCommand(cmd) {
   }
 }
 
-async function executeCommand(text) {
-  const localCmd = parseCommand(text);
+/* Memória curta de conversa: se a IA perguntou algo (ex: "a que horas?") e
+   ficou sem resposta certa, a próxima fala do usuário é tratada como
+   COMPLEMENTO daquela frase, não como um comando novo do zero. Sem isso,
+   responder só "às 15h" virava um compromisso vazio e confuso. */
+let pendingClarification = null; // { text: string } | null
 
-  let cmds = localCmd ? [localCmd] : null;
-  if (!cmds) {
+async function executeCommand(text) {
+  let cmds;
+  let contextText = text;
+
+  if (pendingClarification) {
+    contextText = `${pendingClarification.text}. ${text}`;
+    pendingClarification = null;
     micHint.textContent = "Pensando…";
-    cmds = await callAIFallback(text);
+    cmds = await callAIFallback(contextText);
     if (!Array.isArray(cmds)) cmds = [cmds];
     micHint.textContent = 'Toque e fale, ex: "lembra do remédio da Sofia às 14h"';
+  } else {
+    const localCmd = parseCommand(text);
+    cmds = localCmd ? [localCmd] : null;
+    if (!cmds) {
+      micHint.textContent = "Pensando…";
+      cmds = await callAIFallback(text);
+      if (!Array.isArray(cmds)) cmds = [cmds];
+      micHint.textContent = 'Toque e fale, ex: "lembra do remédio da Sofia às 14h"';
+    }
+  }
+
+  if (cmds.length === 1 && cmds[0].type === "desconhecido") {
+    pendingClarification = { text: contextText };
   }
 
   const reply = cmds.map((c) => applyCommand(c)).join(" ");
