@@ -1,4 +1,4 @@
-const CACHE = "mulher-moderna-v2.1.0";
+const CACHE = "mulher-moderna-v2.2.0";
 const ASSETS = ["./", "./index.html", "./style.css", "./app.js", "./manifest.json", "./icon.svg"];
 
 self.addEventListener("install", (e) => {

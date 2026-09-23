@@ -12,8 +12,8 @@
 /* Bump a cada publicação -- aparece no topo do app para confirmar que a
    versão nova entrou no ar (o service worker cacheia agressivamente, então
    sem isso não dá para saber se o celular já atualizou). */
-const APP_VERSION = "2.1.0";
-const BUILD_TIME = "2026-09-23 19:10";
+const APP_VERSION = "2.2.0";
+const BUILD_TIME = "2026-09-23 20:15";
 
 const STORAGE_KEY = "mulher-moderna-data-v1";
 
@@ -339,7 +339,7 @@ async function executeCommand(text) {
   }
 
   const reply = applyCommand(cmd);
-  speak(reply);
+  speakSmart(reply);
   toast(reply);
   renderAll();
 }
@@ -492,8 +492,6 @@ function typedFallbackPrompt() {
   }
 }
 
-const VOICE_PREF_KEY = "mulher-moderna-voice-uri";
-
 function pickBestDefaultVoice(voices) {
   const ptVoices = voices.filter((v) => v.lang && v.lang.toLowerCase().startsWith("pt"));
   const ptBr = ptVoices.find((v) => v.lang.toLowerCase() === "pt-br");
@@ -503,8 +501,8 @@ function pickBestDefaultVoice(voices) {
 function getSelectedVoice() {
   const voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
   if (!voices.length) return null;
-  const savedUri = localStorage.getItem(VOICE_PREF_KEY);
-  const saved = savedUri && voices.find((v) => v.voiceURI === savedUri);
+  const pref = getTtsPref();
+  const saved = pref.voiceURI && voices.find((v) => v.voiceURI === pref.voiceURI);
   return saved || pickBestDefaultVoice(voices);
 }
 
@@ -523,62 +521,127 @@ function speak(text) {
   window.speechSynthesis.speak(u);
 }
 
+/* --------------------------- Voz em nuvem (Google TTS) --------------------
+   Muito mais natural que a voz do sistema. Usada nas respostas gerais;
+   os alarmes de remédio (showAlarm, acima) continuam na voz nativa de
+   propósito -- não podem depender de internet. Se a chamada de rede falhar
+   (sem sinal, API fora do ar), cai automaticamente para a voz nativa. */
+const TTS_PREF_KEY = "mulher-moderna-tts-pref";
+const CLOUD_VOICES = [
+  { id: "pt-BR-Wavenet-A", label: "Camila (nuvem, feminina)" },
+  { id: "pt-BR-Wavenet-C", label: "Luciana (nuvem, feminina)" },
+  { id: "pt-BR-Wavenet-B", label: "Rafael (nuvem, masculina)" },
+];
+
+function getTtsPref() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(TTS_PREF_KEY));
+    if (saved && saved.mode) return saved;
+  } catch {
+    /* ignora */
+  }
+  return { mode: "cloud", cloudVoice: CLOUD_VOICES[0].id };
+}
+function setTtsPref(pref) {
+  localStorage.setItem(TTS_PREF_KEY, JSON.stringify(pref));
+}
+
+let currentCloudAudio = null;
+async function speakCloud(text, voiceId) {
+  const r = await fetch("/api/tts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, voice: voiceId }),
+  });
+  if (!r.ok) throw new Error("tts_failed");
+  const { audioContent } = await r.json();
+  if (!audioContent) throw new Error("tts_empty");
+  if (currentCloudAudio) currentCloudAudio.pause();
+  currentCloudAudio = new Audio(`data:audio/mp3;base64,${audioContent}`);
+  await currentCloudAudio.play();
+}
+
+async function speakSmart(text) {
+  const pref = getTtsPref();
+  if (pref.mode === "cloud") {
+    try {
+      await speakCloud(text, pref.cloudVoice);
+      return;
+    } catch {
+      /* sem internet ou API fora do ar -- cai para a voz nativa abaixo */
+    }
+  }
+  speak(text);
+}
+
 /* --------------------------- Seleção de voz (TTS) -------------------------
-   O navegador expõe as vozes instaladas no sistema -- em geral bem mais
-   naturais que a voz padrão do Chrome. O usuário escolhe e testa; a escolha
-   fica salva no aparelho (localStorage).
+   Lista tanto as vozes de nuvem (mais naturais, precisam de internet)
+   quanto as vozes nativas do celular (offline, grátis). O usuário escolhe
+   e testa; a escolha fica salva no aparelho (localStorage).
 ---------------------------------------------------------------------------- */
 const voiceOverlay = document.getElementById("voiceOverlay");
 const voiceList = document.getElementById("voiceList");
 
 function renderVoiceList() {
-  if (!window.speechSynthesis) {
-    voiceList.innerHTML = '<p class="empty-hint">Este navegador não suporta seleção de vozes.</p>';
-    return;
-  }
-  const all = window.speechSynthesis.getVoices();
-  const pt = all.filter((v) => v.lang && v.lang.toLowerCase().startsWith("pt"));
-  const voices = pt.length ? pt : all;
-  const selected = getSelectedVoice();
+  const pref = getTtsPref();
+  const rows = [];
 
-  if (!voices.length) {
-    voiceList.innerHTML = '<p class="empty-hint">Carregando vozes disponíveis…</p>';
-    return;
-  }
+  CLOUD_VOICES.forEach((v) => {
+    const selected = pref.mode === "cloud" && pref.cloudVoice === v.id;
+    rows.push({
+      key: `cloud:${v.id}`,
+      name: `🌐 ${v.label}`,
+      sub: "voz de nuvem · mais natural · precisa de internet",
+      selected,
+      onSelect: () => setTtsPref({ mode: "cloud", cloudVoice: v.id }),
+      onPlay: () => speakCloud("Oi! Essa é a minha voz. Ficou boa assim?", v.id).catch(() => toast("Não consegui carregar essa voz agora.")),
+    });
+  });
+
+  const all = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+  const pt = all.filter((v) => v.lang && v.lang.toLowerCase().startsWith("pt"));
+  const nativeVoices = pt.length ? pt : all;
+  nativeVoices.forEach((v) => {
+    const selected = pref.mode === "native" && pref.voiceURI === v.voiceURI;
+    rows.push({
+      key: `native:${v.voiceURI}`,
+      name: `📱 ${v.name}`,
+      sub: `voz do celular · offline · ${v.lang}`,
+      selected,
+      onSelect: () => setTtsPref({ mode: "native", voiceURI: v.voiceURI }),
+      onPlay: () => {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance("Oi! Essa é a minha voz. Ficou boa assim?");
+        u.voice = v;
+        u.lang = v.lang;
+        window.speechSynthesis.speak(u);
+      },
+    });
+  });
 
   voiceList.innerHTML = "";
-  voices.forEach((v) => {
-    const row = document.createElement("div");
-    row.className = "voice-row" + (selected && selected.voiceURI === v.voiceURI ? " selected" : "");
-    row.innerHTML = `
+  rows.forEach((row) => {
+    const el = document.createElement("div");
+    el.className = "voice-row" + (row.selected ? " selected" : "");
+    el.innerHTML = `
       <div class="voice-row-main">
-        <div class="voice-row-name">${v.name}</div>
-        <div class="voice-row-lang">${v.lang}</div>
+        <div class="voice-row-name">${row.name}</div>
+        <div class="voice-row-lang">${row.sub}</div>
       </div>
-      <button class="voice-row-play" data-uri="${encodeURIComponent(v.voiceURI)}" data-action="play-voice">▶</button>
+      <button class="voice-row-play" data-action="play-voice">▶</button>
     `;
-    row.addEventListener("click", (e) => {
+    el.addEventListener("click", (e) => {
       if (e.target.closest("[data-action='play-voice']")) return;
-      localStorage.setItem(VOICE_PREF_KEY, v.voiceURI);
+      row.onSelect();
       renderVoiceList();
     });
-    voiceList.appendChild(row);
+    el.querySelector("[data-action='play-voice']").addEventListener("click", (e) => {
+      e.stopPropagation();
+      row.onPlay();
+    });
+    voiceList.appendChild(el);
   });
 }
-
-voiceList.addEventListener("click", (e) => {
-  const btn = e.target.closest("[data-action='play-voice']");
-  if (!btn) return;
-  e.stopPropagation();
-  const uri = decodeURIComponent(btn.dataset.uri);
-  const voice = window.speechSynthesis.getVoices().find((v) => v.voiceURI === uri);
-  if (!voice) return;
-  window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance("Oi! Essa é a minha voz. Ficou boa assim?");
-  u.voice = voice;
-  u.lang = voice.lang;
-  window.speechSynthesis.speak(u);
-});
 
 document.getElementById("voiceSettingsBtn").addEventListener("click", () => {
   renderVoiceList();
@@ -586,7 +649,8 @@ document.getElementById("voiceSettingsBtn").addEventListener("click", () => {
 });
 document.getElementById("voiceCloseBtn").addEventListener("click", () => {
   voiceOverlay.classList.remove("show");
-  window.speechSynthesis.cancel();
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+  if (currentCloudAudio) currentCloudAudio.pause();
 });
 if (window.speechSynthesis) {
   window.speechSynthesis.onvoiceschanged = () => {
