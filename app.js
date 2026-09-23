@@ -9,6 +9,12 @@
      real está marcado no código (callAIFallback).
    ========================================================================== */
 
+/* Bump a cada publicação -- aparece no topo do app para confirmar que a
+   versão nova entrou no ar (o service worker cacheia agressivamente, então
+   sem isso não dá para saber se o celular já atualizou). */
+const APP_VERSION = "1.1.0";
+const BUILD_TIME = "2026-09-23 15:40";
+
 const STORAGE_KEY = "mulher-moderna-data-v1";
 
 const state = load() || {
@@ -498,6 +504,9 @@ function seedIfEmpty() {
   addRemedio("Sofia", "14:00");
   addCompromisso("Dentista da Sofia", "amanhã", "10:00");
 }
+
+document.getElementById("versionTag").textContent = `v${APP_VERSION}`;
+document.getElementById("versionTag").title = `Publicado em ${BUILD_TIME}`;
 
 seedIfEmpty();
 renderAll();
