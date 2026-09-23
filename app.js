@@ -12,8 +12,8 @@
 /* Bump a cada publicação -- aparece no topo do app para confirmar que a
    versão nova entrou no ar (o service worker cacheia agressivamente, então
    sem isso não dá para saber se o celular já atualizou). */
-const APP_VERSION = "1.1.1";
-const BUILD_TIME = "2026-09-23 16:20";
+const APP_VERSION = "2.0.0";
+const BUILD_TIME = "2026-09-23 18:05";
 
 const STORAGE_KEY = "mulher-moderna-data-v1";
 
@@ -145,15 +145,24 @@ function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-/* -------------------- Fallback simulado (LLM barato) --------------------
-   No app real: Claude Haiku 4.5 + prompt caching, só chamado quando o
-   parser local (acima) não reconhece o comando -- é o ponto que mantém
-   o custo de IA baixo (ver seção "Estratégia de Custo de IA" do plano).
+/* -------------------------- Fallback de IA real --------------------------
+   Claude Haiku via função serverless (api/interpret.js), só chamado quando
+   o parser local (acima) não reconhece o comando -- é o que mantém o custo
+   de IA baixo (ver seção "Estratégia de Custo de IA" do plano): a imensa
+   maioria dos comandos nunca chega até aqui.
 ------------------------------------------------------------------------- */
-function callAIFallback(text) {
-  return {
-    reply: `Não tenho certeza do que você quis dizer com "${text}". Em produção, isso seria enviado para a IA (Claude Haiku) entender melhor — aqui no protótipo, tente um dos comandos de exemplo.`,
-  };
+async function callAIFallback(text) {
+  try {
+    const r = await fetch("/api/interpret", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    if (!r.ok) throw new Error("bad_status");
+    return await r.json();
+  } catch {
+    return { type: "desconhecido", reply: "Não consegui falar com a IA agora. Tente de novo em um instante." };
+  }
 }
 
 /* -------------------------------- UI refs ------------------------------- */
@@ -295,41 +304,41 @@ function addCompromisso(title, dateLabel, time) {
 }
 
 /* --------------------------- Execução de comando -------------------------- */
-function executeCommand(text) {
-  const cmd = parseCommand(text);
-
-  if (!cmd) {
-    const { reply } = callAIFallback(text);
-    speak(reply);
-    toast(reply);
-    return;
-  }
-
-  let reply = "";
+function applyCommand(cmd) {
   switch (cmd.type) {
     case "lista_add":
       addListaItems(cmd.items);
-      reply = `Prontinho! Adicionei ${cmd.items.join(" e ")} na lista.`;
-      break;
+      return `Prontinho! Adicionei ${cmd.items.join(" e ")} na lista.`;
     case "lista_marcar": {
       const ok = marcarListaComprado(cmd.item);
-      reply = ok ? `Marquei "${cmd.item}" como comprado.` : `Não encontrei "${cmd.item}" na lista.`;
-      break;
+      return ok ? `Marquei "${cmd.item}" como comprado.` : `Não encontrei "${cmd.item}" na lista.`;
     }
     case "remedio_add":
       addRemedio(cmd.child, cmd.time);
-      reply = `Prontinho! Remédio de ${cmd.child} às ${cmd.time}, vou te lembrar.`;
-      break;
+      return `Prontinho! Remédio de ${cmd.child} às ${cmd.time}, vou te lembrar.`;
     case "remedio_confirmar": {
       const ok = confirmarRemedio(cmd.child);
-      reply = ok ? `Confirmado! Registrei que ${cmd.child} tomou o remédio.` : `Não encontrei remédio pendente de ${cmd.child}.`;
-      break;
+      return ok ? `Confirmado! Registrei que ${cmd.child} tomou o remédio.` : `Não encontrei remédio pendente de ${cmd.child}.`;
     }
     case "compromisso_add":
       addCompromisso(cmd.title, cmd.dateLabel, cmd.time);
-      reply = `Prontinho! ${cmd.title} ${cmd.dateLabel} às ${cmd.time}.`;
-      break;
+      return `Prontinho! ${cmd.title} ${cmd.dateLabel} às ${cmd.time}.`;
+    default:
+      return cmd.reply || "Não entendi, pode repetir de outro jeito?";
   }
+}
+
+async function executeCommand(text) {
+  const localCmd = parseCommand(text);
+
+  let cmd = localCmd;
+  if (!cmd) {
+    micHint.textContent = "Pensando…";
+    cmd = await callAIFallback(text);
+    micHint.textContent = 'Toque e fale, ex: "lembra do remédio da Sofia às 14h"';
+  }
+
+  const reply = applyCommand(cmd);
   speak(reply);
   toast(reply);
   renderAll();
