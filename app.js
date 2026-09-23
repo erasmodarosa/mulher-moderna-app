@@ -12,8 +12,8 @@
 /* Bump a cada publicação -- aparece no topo do app para confirmar que a
    versão nova entrou no ar (o service worker cacheia agressivamente, então
    sem isso não dá para saber se o celular já atualizou). */
-const APP_VERSION = "3.1.1";
-const BUILD_TIME = "2026-09-24 03:25";
+const APP_VERSION = "3.2.0";
+const BUILD_TIME = "2026-09-24 03:50";
 
 const STORAGE_KEY = "mulher-moderna-data-v2";
 
@@ -236,6 +236,9 @@ function renderRemedios() {
     const next = nextPendingDose(t);
     const li = document.createElement("li");
     li.className = "item-row";
+    li.dataset.action = "open-tratamento";
+    li.dataset.id = t.id;
+    li.style.cursor = "pointer";
     const tagClass = next ? "warn" : "";
     li.innerHTML = `
       <div class="check ${!next ? "checked" : ""}">${!next ? "✓" : ""}</div>
@@ -458,6 +461,45 @@ document.getElementById("alarmSnooze").addEventListener("click", () => {
   hideAlarm();
 });
 
+/* -------------------------- Detalhe do tratamento --------------------------
+   Abre ao clicar num remédio na lista: mostra TODOS os horários calculados,
+   pra conferir se o intervalo/duração ficaram certos, e permite excluir. */
+const treatmentOverlay = document.getElementById("treatmentOverlay");
+let treatmentOpenId = null;
+
+function showTreatmentDetail(t) {
+  treatmentOpenId = t.id;
+  document.getElementById("treatmentTitle").textContent = `${t.child} · ${t.medName}`;
+  document.getElementById("treatmentSub").textContent = `De ${t.intervalHours} em ${t.intervalHours}h, por ${t.days} dia${t.days > 1 ? "s" : ""} — ${t.doses.length} doses no total.`;
+  const list = document.getElementById("treatmentDoses");
+  list.innerHTML = "";
+  t.doses.forEach((d, i) => {
+    const row = document.createElement("div");
+    row.className = "voice-row";
+    row.innerHTML = `
+      <div class="voice-row-main">
+        <div class="voice-row-name">Dose ${i + 1} de ${t.doses.length}</div>
+        <div class="voice-row-lang">${formatDoseWhen(d.at)}</div>
+      </div>
+      <span class="tag ${d.given ? "" : "warn"}">${d.given ? "✓ dada" : "pendente"}</span>
+    `;
+    list.appendChild(row);
+  });
+  treatmentOverlay.classList.add("show");
+}
+document.getElementById("treatmentCloseBtn").addEventListener("click", () => {
+  treatmentOverlay.classList.remove("show");
+  treatmentOpenId = null;
+});
+document.getElementById("treatmentDeleteBtn").addEventListener("click", () => {
+  if (!treatmentOpenId) return;
+  if (!confirm("Excluir este tratamento e todas as doses agendadas?")) return;
+  state.tratamentos = state.tratamentos.filter((x) => x.id !== treatmentOpenId);
+  treatmentOverlay.classList.remove("show");
+  treatmentOpenId = null;
+  renderAll();
+});
+
 /* --------------------------- Checagem de horário --------------------------
    Alarme crítico funciona por checagem local de relógio (sem depender de
    internet) -- reflete o requisito de "alarmes críticos offline" do plano.
@@ -494,6 +536,10 @@ document.getElementById("screen").addEventListener("click", (e) => {
   if (action === "test-alarm") {
     const t = state.tratamentos.find((x) => x.id === id);
     if (t) showAlarm(t);
+  }
+  if (action === "open-tratamento") {
+    const t = state.tratamentos.find((x) => x.id === id);
+    if (t) showTreatmentDetail(t);
   }
 });
 
