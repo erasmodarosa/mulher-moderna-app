@@ -161,7 +161,7 @@ async function callAIFallback(text) {
     if (!r.ok) throw new Error("bad_status");
     return await r.json();
   } catch {
-    return { type: "desconhecido", reply: "Não consegui falar com a IA agora. Tente de novo em um instante." };
+    return [{ type: "desconhecido", reply: "Não consegui falar com a IA agora. Tente de novo em um instante." }];
   }
 }
 
@@ -331,14 +331,15 @@ function applyCommand(cmd) {
 async function executeCommand(text) {
   const localCmd = parseCommand(text);
 
-  let cmd = localCmd;
-  if (!cmd) {
+  let cmds = localCmd ? [localCmd] : null;
+  if (!cmds) {
     micHint.textContent = "Pensando…";
-    cmd = await callAIFallback(text);
-    micHint.textContent = 'Toque e fale, ex: "lembra do remédio da Sofia às 14h"';
+    cmds = await callAIFallback(text);
+    if (!Array.isArray(cmds)) cmds = [cmds];
+    micHint.textContent = mode === "wake" ? WAKE_HINT : DEFAULT_HINT;
   }
 
-  const reply = applyCommand(cmd);
+  const reply = cmds.map((c) => applyCommand(c)).join(" ");
   speakSmart(reply);
   toast(reply);
   renderAll();
