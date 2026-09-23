@@ -12,8 +12,8 @@
 /* Bump a cada publicação -- aparece no topo do app para confirmar que a
    versão nova entrou no ar (o service worker cacheia agressivamente, então
    sem isso não dá para saber se o celular já atualizou). */
-const APP_VERSION = "2.2.0";
-const BUILD_TIME = "2026-09-23 20:15";
+const APP_VERSION = "2.3.0";
+const BUILD_TIME = "2026-09-23 21:30";
 
 const STORAGE_KEY = "mulher-moderna-data-v1";
 
@@ -530,7 +530,9 @@ const TTS_PREF_KEY = "mulher-moderna-tts-pref";
 const CLOUD_VOICES = [
   { id: "pt-BR-Wavenet-A", label: "Camila (nuvem, feminina)" },
   { id: "pt-BR-Wavenet-C", label: "Luciana (nuvem, feminina)" },
+  { id: "pt-BR-Wavenet-D", label: "Beatriz (nuvem, feminina)" },
   { id: "pt-BR-Wavenet-B", label: "Rafael (nuvem, masculina)" },
+  { id: "pt-BR-Wavenet-E", label: "Thiago (nuvem, masculina)" },
 ];
 
 function getTtsPref() {
