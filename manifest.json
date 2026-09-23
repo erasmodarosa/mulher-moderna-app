@@ -1,0 +1,14 @@
+{
+  "name": "Mulher Moderna",
+  "short_name": "M. Moderna",
+  "description": "Secretária pessoal por voz para a rotina da família",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#faf6f2",
+  "theme_color": "#d97757",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
