@@ -96,6 +96,51 @@ body {
   cursor: pointer;
 }
 
+.topbar-actions { display: flex; align-items: center; gap: 10px; }
+.icon-btn {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: var(--blush);
+  color: var(--terracotta-dark);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+
+.voice-card { text-align: left; }
+.voice-card .alarm-title, .voice-card .alarm-sub { text-align: center; }
+.voice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 45vh;
+  overflow-y: auto;
+  margin: 16px 0;
+}
+.voice-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--line);
+  cursor: pointer;
+}
+.voice-row.selected { border-color: var(--terracotta); background: var(--blush); }
+.voice-row-main { flex: 1; min-width: 0; }
+.voice-row-name { font-size: 13.5px; font-weight: 600; }
+.voice-row-lang { font-size: 11.5px; color: var(--ink-soft); }
+.voice-row-play {
+  border: none;
+  background: var(--surface);
+  color: var(--terracotta-dark);
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  box-shadow: var(--shadow);
+}
+
 .screen {
   flex: 1;
   padding: 8px 20px 32px;

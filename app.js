@@ -12,8 +12,8 @@
 /* Bump a cada publicação -- aparece no topo do app para confirmar que a
    versão nova entrou no ar (o service worker cacheia agressivamente, então
    sem isso não dá para saber se o celular já atualizou). */
-const APP_VERSION = "2.0.0";
-const BUILD_TIME = "2026-09-23 18:05";
+const APP_VERSION = "2.1.0";
+const BUILD_TIME = "2026-09-23 19:10";
 
 const STORAGE_KEY = "mulher-moderna-data-v1";
 
@@ -492,13 +492,106 @@ function typedFallbackPrompt() {
   }
 }
 
+const VOICE_PREF_KEY = "mulher-moderna-voice-uri";
+
+function pickBestDefaultVoice(voices) {
+  const ptVoices = voices.filter((v) => v.lang && v.lang.toLowerCase().startsWith("pt"));
+  const ptBr = ptVoices.find((v) => v.lang.toLowerCase() === "pt-br");
+  return ptBr || ptVoices[0] || voices[0] || null;
+}
+
+function getSelectedVoice() {
+  const voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+  if (!voices.length) return null;
+  const savedUri = localStorage.getItem(VOICE_PREF_KEY);
+  const saved = savedUri && voices.find((v) => v.voiceURI === savedUri);
+  return saved || pickBestDefaultVoice(voices);
+}
+
 function speak(text) {
   if (!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = "pt-BR";
+  const voice = getSelectedVoice();
+  if (voice) {
+    u.voice = voice;
+    u.lang = voice.lang;
+  } else {
+    u.lang = "pt-BR";
+  }
   u.rate = 1.02;
   window.speechSynthesis.speak(u);
+}
+
+/* --------------------------- Seleção de voz (TTS) -------------------------
+   O navegador expõe as vozes instaladas no sistema -- em geral bem mais
+   naturais que a voz padrão do Chrome. O usuário escolhe e testa; a escolha
+   fica salva no aparelho (localStorage).
+---------------------------------------------------------------------------- */
+const voiceOverlay = document.getElementById("voiceOverlay");
+const voiceList = document.getElementById("voiceList");
+
+function renderVoiceList() {
+  if (!window.speechSynthesis) {
+    voiceList.innerHTML = '<p class="empty-hint">Este navegador não suporta seleção de vozes.</p>';
+    return;
+  }
+  const all = window.speechSynthesis.getVoices();
+  const pt = all.filter((v) => v.lang && v.lang.toLowerCase().startsWith("pt"));
+  const voices = pt.length ? pt : all;
+  const selected = getSelectedVoice();
+
+  if (!voices.length) {
+    voiceList.innerHTML = '<p class="empty-hint">Carregando vozes disponíveis…</p>';
+    return;
+  }
+
+  voiceList.innerHTML = "";
+  voices.forEach((v) => {
+    const row = document.createElement("div");
+    row.className = "voice-row" + (selected && selected.voiceURI === v.voiceURI ? " selected" : "");
+    row.innerHTML = `
+      <div class="voice-row-main">
+        <div class="voice-row-name">${v.name}</div>
+        <div class="voice-row-lang">${v.lang}</div>
+      </div>
+      <button class="voice-row-play" data-uri="${encodeURIComponent(v.voiceURI)}" data-action="play-voice">▶</button>
+    `;
+    row.addEventListener("click", (e) => {
+      if (e.target.closest("[data-action='play-voice']")) return;
+      localStorage.setItem(VOICE_PREF_KEY, v.voiceURI);
+      renderVoiceList();
+    });
+    voiceList.appendChild(row);
+  });
+}
+
+voiceList.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-action='play-voice']");
+  if (!btn) return;
+  e.stopPropagation();
+  const uri = decodeURIComponent(btn.dataset.uri);
+  const voice = window.speechSynthesis.getVoices().find((v) => v.voiceURI === uri);
+  if (!voice) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance("Oi! Essa é a minha voz. Ficou boa assim?");
+  u.voice = voice;
+  u.lang = voice.lang;
+  window.speechSynthesis.speak(u);
+});
+
+document.getElementById("voiceSettingsBtn").addEventListener("click", () => {
+  renderVoiceList();
+  voiceOverlay.classList.add("show");
+});
+document.getElementById("voiceCloseBtn").addEventListener("click", () => {
+  voiceOverlay.classList.remove("show");
+  window.speechSynthesis.cancel();
+});
+if (window.speechSynthesis) {
+  window.speechSynthesis.onvoiceschanged = () => {
+    if (voiceOverlay.classList.contains("show")) renderVoiceList();
+  };
 }
 
 /* --------------------------------- Perfil --------------------------------- */

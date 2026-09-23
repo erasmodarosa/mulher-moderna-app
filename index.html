@@ -18,7 +18,12 @@
         <span class="brand-name">Mulher Moderna</span>
         <span class="version-tag" id="versionTag"></span>
       </div>
-      <div class="profile" id="profileBtn" title="Trocar perfil">A</div>
+      <div class="topbar-actions">
+        <button class="icon-btn" id="voiceSettingsBtn" title="Escolher voz" aria-label="Escolher voz">
+          <svg viewBox="0 0 24 24" width="19" height="19" fill="none"><path d="M11 5 6 9H3v6h3l5 4V5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M15.5 8.5a5 5 0 0 1 0 7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M18 6a9 9 0 0 1 0 12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        </button>
+        <div class="profile" id="profileBtn" title="Trocar perfil">A</div>
+      </div>
     </header>
 
     <main class="screen" id="screen">
@@ -92,6 +97,16 @@
       <div class="alarm-sub" id="alarmSub"></div>
       <button class="alarm-confirm" id="alarmConfirm">Já dei o remédio</button>
       <button class="alarm-snooze" id="alarmSnooze">Lembrar em 5 min</button>
+    </div>
+  </div>
+
+  <!-- Modal de escolha de voz -->
+  <div class="alarm-overlay" id="voiceOverlay">
+    <div class="alarm-card voice-card">
+      <div class="alarm-title">Escolha a voz da Moderna</div>
+      <div class="alarm-sub">Cada celular tem vozes diferentes instaladas. Teste e escolha a mais natural.</div>
+      <div class="voice-list" id="voiceList"></div>
+      <button class="alarm-snooze" id="voiceCloseBtn">Fechar</button>
     </div>
   </div>
 
