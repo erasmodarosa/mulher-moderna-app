@@ -189,6 +189,31 @@ body {
   70% { box-shadow: 0 0 0 22px rgba(217,119,87,0), 0 10px 26px rgba(217,119,87,0.4); }
   100% { box-shadow: 0 0 0 0 rgba(217,119,87,0), 0 10px 26px rgba(217,119,87,0.4); }
 }
+.mic-btn.wake-idle {
+  animation: pulse-soft 2.6s ease-in-out infinite;
+}
+@keyframes pulse-soft {
+  0% { box-shadow: 0 0 0 0 rgba(217,119,87,0.35), 0 10px 26px rgba(217,119,87,0.4); }
+  70% { box-shadow: 0 0 0 12px rgba(217,119,87,0), 0 10px 26px rgba(217,119,87,0.4); }
+  100% { box-shadow: 0 0 0 0 rgba(217,119,87,0), 0 10px 26px rgba(217,119,87,0.4); }
+}
+
+.wake-toggle {
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  margin-top: 4px;
+}
+.wake-toggle.on {
+  border-color: var(--terracotta);
+  background: var(--blush);
+  color: var(--terracotta-dark);
+}
 
 .mic-hint {
   font-size: 13px;
