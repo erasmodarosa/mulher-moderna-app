@@ -12,8 +12,8 @@
 /* Bump a cada publicação -- aparece no topo do app para confirmar que a
    versão nova entrou no ar (o service worker cacheia agressivamente, então
    sem isso não dá para saber se o celular já atualizou). */
-const APP_VERSION = "2.6.1";
-const BUILD_TIME = "2026-09-23 23:50";
+const APP_VERSION = "2.6.2";
+const BUILD_TIME = "2026-09-24 00:15";
 
 const STORAGE_KEY = "mulher-moderna-data-v1";
 
@@ -452,6 +452,18 @@ function updateWakeToggleUI() {
   wakeToggle.setAttribute("aria-pressed", String(wakeModeOn));
 }
 
+function startRecognitionFor(targetMode) {
+  // continuous:true evita que o navegador encerre (e reinicie, com bipe) a
+  // sessão a cada poucos segundos de silêncio -- essencial no modo escuta
+  // contínua. No modo manual (um comando só) deixamos como estava.
+  recognition.continuous = targetMode === "wake";
+  try {
+    recognition.start();
+  } catch {
+    /* já iniciado */
+  }
+}
+
 if (SpeechRecognitionCtor) {
   recognition = new SpeechRecognitionCtor();
   recognition.lang = "pt-BR";
@@ -473,23 +485,13 @@ if (SpeechRecognitionCtor) {
     listening = false;
     micBtn.classList.remove("listening", "wake-idle");
     if (mode === "wake" && wakeModeOn) {
-      // o navegador encerra sessões longas sozinho -- reinicia pra manter a escuta contínua
-      try {
-        recognition.start();
-      } catch {
-        /* já iniciado */
-      }
+      // o navegador pode encerrar mesmo em modo contínuo (ex: app minimizado) -- reinicia
+      startRecognitionFor("wake");
       return;
     }
     mode = wakeModeOn ? "wake" : "idle";
     micHint.textContent = wakeModeOn ? WAKE_HINT : DEFAULT_HINT;
-    if (wakeModeOn) {
-      try {
-        recognition.start();
-      } catch {
-        /* já iniciado */
-      }
-    }
+    if (wakeModeOn) startRecognitionFor("wake");
   };
 
   recognition.onerror = (e) => {
@@ -546,11 +548,7 @@ micBtn.addEventListener("click", () => {
   } else {
     mode = "manual";
     transcriptEl.textContent = "";
-    try {
-      recognition.start();
-    } catch {
-      /* já iniciado */
-    }
+    startRecognitionFor("manual");
   }
 });
 
@@ -561,11 +559,7 @@ wakeToggle.addEventListener("click", () => {
   updateWakeToggleUI();
   if (wakeModeOn) {
     mode = "wake";
-    try {
-      recognition.start();
-    } catch {
-      /* já iniciado */
-    }
+    startRecognitionFor("wake");
   } else {
     mode = "idle";
     recognition.stop();
@@ -576,11 +570,7 @@ wakeToggle.addEventListener("click", () => {
 updateWakeToggleUI();
 if (wakeModeOn && recognition) {
   mode = "wake";
-  try {
-    recognition.start();
-  } catch {
-    /* precisa de permissão do usuário primeiro */
-  }
+  startRecognitionFor("wake");
 }
 
 function typedFallbackPrompt() {
