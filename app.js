@@ -12,8 +12,8 @@
 /* Bump a cada publicação -- aparece no topo do app para confirmar que a
    versão nova entrou no ar (o service worker cacheia agressivamente, então
    sem isso não dá para saber se o celular já atualizou). */
-const APP_VERSION = "2.3.0";
-const BUILD_TIME = "2026-09-23 21:30";
+const APP_VERSION = "2.4.0";
+const BUILD_TIME = "2026-09-23 22:00";
 
 const STORAGE_KEY = "mulher-moderna-data-v1";
 
@@ -528,11 +528,16 @@ function speak(text) {
    (sem sinal, API fora do ar), cai automaticamente para a voz nativa. */
 const TTS_PREF_KEY = "mulher-moderna-tts-pref";
 const CLOUD_VOICES = [
-  { id: "pt-BR-Wavenet-A", label: "Camila (nuvem, feminina)" },
-  { id: "pt-BR-Wavenet-C", label: "Luciana (nuvem, feminina)" },
-  { id: "pt-BR-Wavenet-D", label: "Beatriz (nuvem, feminina)" },
-  { id: "pt-BR-Wavenet-B", label: "Rafael (nuvem, masculina)" },
-  { id: "pt-BR-Wavenet-E", label: "Thiago (nuvem, masculina)" },
+  { id: "pt-BR-Neural2-A", label: "Camila (Neural2, feminina)" },
+  { id: "pt-BR-Neural2-C", label: "Luciana (Neural2, feminina)" },
+  { id: "pt-BR-Neural2-B", label: "Rafael (Neural2, masculina)" },
+  { id: "pt-BR-Chirp3-HD-Aoede", label: "Aoede (Chirp3-HD, feminina, mais cara)" },
+  { id: "pt-BR-Chirp3-HD-Zephyr", label: "Zephyr (Chirp3-HD, feminina, mais cara)" },
+  { id: "pt-BR-Chirp3-HD-Puck", label: "Puck (Chirp3-HD, masculina, mais cara)" },
+  { id: "pt-BR-Wavenet-A", label: "Camila (WaveNet, feminina)" },
+  { id: "pt-BR-Wavenet-D", label: "Beatriz (WaveNet, feminina)" },
+  { id: "pt-BR-Wavenet-B", label: "Rafael (WaveNet, masculina)" },
+  { id: "pt-BR-Wavenet-E", label: "Thiago (WaveNet, masculina)" },
 ];
 
 function getTtsPref() {
