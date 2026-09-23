@@ -49,42 +49,88 @@ function categorize(text) {
 /* ------------------------------ Parser local ---------------------------
    Cobre os 4 fluxos do MVP com regras determinísticas (custo zero).
    Retorna { type, ...dados } ou null se não reconhecer (cai no fallback).
+
+   O parser é tolerante de propósito: fala real vem com palavras de sobra
+   ("moderna", "por favor", "então"), então em vez de casar a frase toda
+   (regex ancorada ^...$), procuramos o padrão em qualquer parte do texto
+   já normalizado.
 ------------------------------------------------------------------------- */
+function normalize(raw) {
+  let t = raw.trim().toLowerCase();
+  t = t.replace(/[.,!?]+$/g, "");
+  // remove palavra de ativação e frases de cortesia que não carregam intenção
+  t = t.replace(/^(ei|oi|olá|al[ôo])[, ]+moderna[, ]*/i, "");
+  t = t.replace(/^moderna[, ]+/i, "");
+  t = t.replace(/\bpor favor\b/gi, "");
+  t = t.replace(/^(lembra(?:r)?(?: de| que)?|n[ãa]o (?:me )?deixa(?:r)? eu esquecer(?: de)?)\s+/i, "");
+  t = t.replace(/^(pode|voc[êe] pode)\s+/i, "");
+  return t.replace(/\s{2,}/g, " ").trim();
+}
+
+function parseTime(text) {
+  const m =
+    text.match(/(?:[àa]s?|pras?|para\s+as?)\s*(\d{1,2})(?::(\d{2}))?\s*h(?:oras?)?\b/i) ||
+    text.match(/(\d{1,2}):(\d{2})\b/) ||
+    text.match(/(\d{1,2})\s*h(?:oras?)?\b/i);
+  if (!m) return null;
+  const hh = m[1].padStart(2, "0");
+  const mm = (m[2] || "00").padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+function parseChildName(text) {
+  const m = text.match(/rem[ée]dio\s+d[aoe]s?\s+([a-zçãõáéíóúâêô]+)/i);
+  return m ? capitalize(m[1]) : null;
+}
+
+function stripArticle(s) {
+  return s.trim().replace(/^(o|a|os|as|um|uma)\s+/i, "").trim();
+}
+
 function parseCommand(raw) {
-  const text = raw.trim().toLowerCase();
+  const text = normalize(raw);
 
   // 1) Marcar item da lista como comprado
-  let m = text.match(/^j[áa] compre[i]?\s+(.+)$/) || text.match(/^comprei\s+(.+)$/);
-  if (m) return { type: "lista_marcar", item: m[1].trim() };
+  let m =
+    text.match(/^j[áa]\s+compre[i]?\s+(.+)$/) ||
+    text.match(/^comprei\s+(.+)$/) ||
+    text.match(/^(?:tira|remove)\s+(.+?)\s+da lista/);
+  if (m) return { type: "lista_marcar", item: stripArticle(m[1]) };
 
-  // 2) Adicionar item(ns) na lista de compras
-  m = text.match(/^(?:adiciona|coloca|p[õo]e)\s+(.+?)\s+na lista(?: de compras)?$/);
+  // 2) Confirmar remédio dado (checar antes de "cadastrar remédio")
+  m = text.match(/(?:^|\s)(?:j[áa]\s+)?(?:dei|deu|dado|tomou)\s+(?:o|a)?\s*rem[ée]dio\s+d[aoe]s?\s+([a-zçãõáéíóúâêô]+)/i);
+  if (m) return { type: "remedio_confirmar", child: capitalize(m[1]) };
+  m = text.match(/rem[ée]dio\s+d[aoe]s?\s+([a-zçãõáéíóúâêô]+)\s+(?:j[áa]\s+)?(?:foi\s+)?(?:dado|tomado)/i);
+  if (m) return { type: "remedio_confirmar", child: capitalize(m[1]) };
+
+  // 3) Cadastrar remédio: precisa de "remédio de/da/do <nome>" + um horário
+  const child = parseChildName(text);
+  const time = parseTime(text);
+  if (child && time && /rem[ée]dio/.test(text)) {
+    return { type: "remedio_add", child, time };
+  }
+
+  // 4) Adicionar item(ns) na lista de compras
+  m = text.match(/^(?:adicion\w*|coloc\w*|p[õo][eê]\w*|inser\w*|compr\w*|precisa de|falta)\s+(.+?)\s+(?:na|pra|para\s+a)\s+(?:minha\s+)?lista(?:\s+de\s+compras)?$/);
   if (m) {
-    const items = m[1].split(/,| e /).map((s) => s.trim()).filter(Boolean);
+    const items = m[1].split(/,| e /).map((s) => stripArticle(s)).filter(Boolean);
+    return { type: "lista_add", items };
+  }
+  // variação sem verbo explícito: "arroz e leite na lista"
+  m = text.match(/^(.+?)\s+(?:na|pra|para\s+a)\s+(?:minha\s+)?lista(?:\s+de\s+compras)?$/);
+  if (m && !/rem[ée]dio/.test(text)) {
+    const items = m[1].split(/,| e /).map((s) => stripArticle(s)).filter(Boolean);
     return { type: "lista_add", items };
   }
 
-  // 3) Confirmar remédio dado
-  m = text.match(/^dei\s+(?:o|a)?\s*rem[ée]dio\s+d[aoe]\s+([a-zçãõáéíóú]+)$/i);
-  if (m) return { type: "remedio_confirmar", child: capitalize(m[1]) };
-
-  // 4) Cadastrar remédio: "remédio da Sofia às 14h" / "lembra do remédio da Sofia às 14h"
-  m = text.match(/rem[ée]dio\s+d[aoe]\s+([a-zçãõáéíóú]+).*?(?:[àa]s?)\s*(\d{1,2})(?::(\d{2}))?\s*h?/i);
-  if (m) {
-    const child = capitalize(m[1]);
-    const hh = m[2].padStart(2, "0");
-    const mm = (m[3] || "00").padStart(2, "0");
-    return { type: "remedio_add", child, time: `${hh}:${mm}` };
-  }
-
-  // 5) Compromisso: "dentista da Sofia amanhã às 10h" / "marca <algo> dia 15 às 10h"
-  m = text.match(/^(?:marca|marcar|agenda|agendar)?\s*(.+?)\s+(hoje|amanh[ãa]|dia\s+\d{1,2})\s+[àa]s?\s*(\d{1,2})(?::(\d{2}))?\s*h?/i);
-  if (m) {
-    const title = capitalize(m[1].trim());
-    const dateLabel = m[2];
-    const hh = m[3].padStart(2, "0");
-    const mm = (m[4] || "00").padStart(2, "0");
-    return { type: "compromisso_add", title, dateLabel, time: `${hh}:${mm}` };
+  // 5) Compromisso: "<algo> hoje/amanhã/dia N às HHh"
+  if (time) {
+    m = text.match(/^(?:marca|marcar|agenda|agendar|tem|vai ter)?\s*(.+?)\s+(hoje|amanh[ãa]|dia\s+\d{1,2})(?=\s|$)/i);
+    if (m) {
+      const title = capitalize(m[1].trim());
+      const dateLabel = m[2];
+      return { type: "compromisso_add", title, dateLabel, time };
+    }
   }
 
   return null;

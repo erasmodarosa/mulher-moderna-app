@@ -1,4 +1,4 @@
-const CACHE = "mulher-moderna-v1";
+const CACHE = "mulher-moderna-v2";
 const ASSETS = ["./", "./index.html", "./style.css", "./app.js", "./manifest.json", "./icon.svg"];
 
 self.addEventListener("install", (e) => {
@@ -13,8 +13,18 @@ self.addEventListener("activate", (e) => {
   self.clients.claim();
 });
 
+/* Network-first para o essencial (html/css/js): garante que uma
+   atualização publicada chega no celular na próxima abertura, em vez de
+   ficar presa no cache antigo. Cai pro cache só se estiver offline --
+   é o que mantém os alarmes de remédio funcionando sem internet. */
 self.addEventListener("fetch", (e) => {
   e.respondWith(
-    caches.match(e.request).then((cached) => cached || fetch(e.request))
+    fetch(e.request)
+      .then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(e.request, copy));
+        return res;
+      })
+      .catch(() => caches.match(e.request))
   );
 });
