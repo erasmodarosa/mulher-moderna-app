@@ -12,8 +12,8 @@
 /* Bump a cada publicação -- aparece no topo do app para confirmar que a
    versão nova entrou no ar (o service worker cacheia agressivamente, então
    sem isso não dá para saber se o celular já atualizou). */
-const APP_VERSION = "2.6.2";
-const BUILD_TIME = "2026-09-24 00:15";
+const APP_VERSION = "2.7.0";
+const BUILD_TIME = "2026-09-24 00:40";
 
 const STORAGE_KEY = "mulher-moderna-data-v1";
 
@@ -336,7 +336,7 @@ async function executeCommand(text) {
     micHint.textContent = "Pensando…";
     cmds = await callAIFallback(text);
     if (!Array.isArray(cmds)) cmds = [cmds];
-    micHint.textContent = mode === "wake" ? WAKE_HINT : DEFAULT_HINT;
+    micHint.textContent = 'Toque e fale, ex: "lembra do remédio da Sofia às 14h"';
   }
 
   const reply = cmds.map((c) => applyCommand(c)).join(" ");
@@ -432,37 +432,9 @@ document.querySelectorAll(".tab").forEach((tab) => {
    custo: usa o motor de voz do próprio sistema operacional, sem chamada de
    API paga.
 ---------------------------------------------------------------------------- */
-const DEFAULT_HINT = 'Toque e fale, ex: "lembra do remédio da Sofia às 14h"';
-const WAKE_HINT = 'Escuta contínua ligada — diga "Moderna" antes do comando';
-const WAKE_WORD_RE = /\bmoderna\b/i;
-const WAKE_MODE_KEY = "mulher-moderna-wake-mode";
-
 const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 let listening = false;
-let mode = "idle"; // "idle" | "manual" | "wake"
-let wakeModeOn = localStorage.getItem(WAKE_MODE_KEY) === "1";
-let bypassWakeOnce = false;
-
-const wakeToggle = document.getElementById("wakeToggle");
-
-function updateWakeToggleUI() {
-  wakeToggle.textContent = wakeModeOn ? "🎧 Escuta contínua: ligada" : "🎧 Escuta contínua: desligada";
-  wakeToggle.classList.toggle("on", wakeModeOn);
-  wakeToggle.setAttribute("aria-pressed", String(wakeModeOn));
-}
-
-function startRecognitionFor(targetMode) {
-  // continuous:true evita que o navegador encerre (e reinicie, com bipe) a
-  // sessão a cada poucos segundos de silêncio -- essencial no modo escuta
-  // contínua. No modo manual (um comando só) deixamos como estava.
-  recognition.continuous = targetMode === "wake";
-  try {
-    recognition.start();
-  } catch {
-    /* já iniciado */
-  }
-}
 
 if (SpeechRecognitionCtor) {
   recognition = new SpeechRecognitionCtor();
@@ -472,37 +444,19 @@ if (SpeechRecognitionCtor) {
 
   recognition.onstart = () => {
     listening = true;
-    if (mode === "wake") {
-      micBtn.classList.add("wake-idle");
-      micHint.textContent = WAKE_HINT;
-    } else {
-      micBtn.classList.add("listening");
-      micHint.textContent = "Ouvindo…";
-    }
+    micBtn.classList.add("listening");
+    micHint.textContent = "Ouvindo…";
   };
-
   recognition.onend = () => {
     listening = false;
-    micBtn.classList.remove("listening", "wake-idle");
-    if (mode === "wake" && wakeModeOn) {
-      // o navegador pode encerrar mesmo em modo contínuo (ex: app minimizado) -- reinicia
-      startRecognitionFor("wake");
-      return;
-    }
-    mode = wakeModeOn ? "wake" : "idle";
-    micHint.textContent = wakeModeOn ? WAKE_HINT : DEFAULT_HINT;
-    if (wakeModeOn) startRecognitionFor("wake");
+    micBtn.classList.remove("listening");
+    micHint.textContent = 'Toque e fale, ex: "lembra do remédio da Sofia às 14h"';
   };
-
   recognition.onerror = (e) => {
     if (e.error === "not-allowed" || e.error === "service-not-allowed") {
       toast("Permita o uso do microfone para falar com a Moderna.");
-      wakeModeOn = false;
-      localStorage.setItem(WAKE_MODE_KEY, "0");
-      updateWakeToggleUI();
     }
   };
-
   recognition.onresult = (e) => {
     let finalText = "";
     let interim = "";
@@ -512,66 +466,24 @@ if (SpeechRecognitionCtor) {
       else interim += t;
     }
     transcriptEl.textContent = finalText || interim;
-    if (!finalText) return;
-
-    if (mode === "manual" || bypassWakeOnce || WAKE_WORD_RE.test(finalText)) {
-      bypassWakeOnce = false;
-      if (mode === "wake") {
-        micBtn.classList.remove("wake-idle");
-        micBtn.classList.add("listening");
-        setTimeout(() => {
-          if (mode === "wake") {
-            micBtn.classList.remove("listening");
-            micBtn.classList.add("wake-idle");
-          }
-        }, 1500);
-      }
-      executeCommand(finalText);
-    }
-    // sem a palavra de ativação em modo escuta contínua: ignora, sem custo de IA nenhum
+    if (finalText) executeCommand(finalText);
   };
 } else {
   micHint.textContent = "Reconhecimento de voz não suportado neste navegador — use o campo de texto abaixo.";
-  wakeToggle.style.display = "none";
 }
 
 micBtn.addEventListener("click", () => {
   if (!recognition) return typedFallbackPrompt();
-
-  if (mode === "wake") {
-    bypassWakeOnce = true;
-    toast("Pode falar!");
-    return;
-  }
-  if (listening) {
-    recognition.stop();
-  } else {
-    mode = "manual";
+  if (listening) recognition.stop();
+  else {
     transcriptEl.textContent = "";
-    startRecognitionFor("manual");
+    try {
+      recognition.start();
+    } catch {
+      /* já iniciado */
+    }
   }
 });
-
-wakeToggle.addEventListener("click", () => {
-  if (!recognition) return;
-  wakeModeOn = !wakeModeOn;
-  localStorage.setItem(WAKE_MODE_KEY, wakeModeOn ? "1" : "0");
-  updateWakeToggleUI();
-  if (wakeModeOn) {
-    mode = "wake";
-    startRecognitionFor("wake");
-  } else {
-    mode = "idle";
-    recognition.stop();
-    micHint.textContent = DEFAULT_HINT;
-  }
-});
-
-updateWakeToggleUI();
-if (wakeModeOn && recognition) {
-  mode = "wake";
-  startRecognitionFor("wake");
-}
 
 function typedFallbackPrompt() {
   const text = prompt('Digite o comando (ex: "adiciona arroz na lista"):');
